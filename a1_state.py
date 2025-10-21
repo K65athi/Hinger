@@ -3,14 +3,16 @@
 class State:
     def __init__(self, grid):
         """
-        Initialize the state with a 2D grid.
-        grid: list of lists of integers
+        Creates a new State object with the given grid.
+        each cell in the grid is an integer representing the number of counters in that cell.
+        0 indicates an inactive cell.
+        1 or more indicates an active cell.
         """
         self.grid = grid
         
     def __str__(self):
         """
-        Return a readable string version of the grid.
+        Return a readable string version of the grid for printing.
         """
         return '\n'.join(' '.join(str(cell) for cell in row) for row in self.grid)
 
