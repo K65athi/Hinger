@@ -55,7 +55,7 @@ class State:
 
     def numHingers(self):
         """
-        Count how many hinger cells exist in the current state.
+        Counts the number of hingers on the board.
         """
         count = 0
         for i in range(len(self.grid)):
