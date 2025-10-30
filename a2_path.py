@@ -1,8 +1,11 @@
 """
-CMP-6058A AI Coursework 1
+Hinger Project
+Coursework 001 for: CMP-6058A Artificial Intelligence
 
-By 100387788
-For group B6
+Includes the functions and testers for the algorithm pathways
+
+@author: Group B6 (100387788, 100361094, 100393447)
+@date: 30/09/2025 (finished)
 """
 
 import time
