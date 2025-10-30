@@ -32,7 +32,7 @@ class State:
         for i in range(len(self.grid)):
             for j in range(len(self.grid[0])):
                 if self.grid[i][j] > 0:  # active cell
-                    new_grid = [row[:] for row in self.grid]  # copy the grid
+                    new_grid = [row[:] for row in self.grid]  
                     new_grid[i][j] -= 1
                     yield State(new_grid)
 
