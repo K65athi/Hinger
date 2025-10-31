@@ -14,83 +14,106 @@ from typing import Optional, Tuple, List, Dict
 from dataclasses import dataclass
 import math
 import time
+import random
 
-# Import the State class from a1_state.py
 try:
     from a1_state import State
 except ImportError:
     raise SystemExit("All of the files should be in the same directory.")
 
-Move = Optional[Tuple[int, int]]  # A move is either None (pass) or a tuple (row, col)
-
-"""
-    Helper functions and classes for the Hinger agent.
-
-"""
+Move = Optional[Tuple[int, int]]  # None (pass) or (row, col)
 
 def _terminal(state: State) -> bool:
-    """
-    if there are no possible moves from the given state, return True (all cells empty).
-    """
+    """True if there are no legal moves from the given state."""
     for _ in state.moves():
         return False
     return True
 
 def _diff_move(parent: State, child: State) -> Tuple[int, int]:
-        """
-        Finds the changed cell between parent and child states.
-        returns the (row, col) of the cell that was changed.
+    """
+    Infer the 'chosen' cell from parent->child.
+    Prefer the cell with the largest decrease. If tie, prefer most central
+    (this avoids top-left bias). If exactly one cell changed by 1, take that.
+    """
+    rows, cols = len(parent.grid), len(parent.grid[0])
+    diffs: List[Tuple[int,int,int]] = []  # (delta, r, c), delta = parent - child (positive if decreased)
+    for r in range(rows):
+        for c in range(cols):
+            d = parent.grid[r][c] - child.grid[r][c]
+            if d > 0:
+                diffs.append((d, r, c))
+    if not diffs:
+        raise ValueError("No decreased cell found between states.")
 
-        """
-        for i in range(len(parent.grid)):
-             for j in range(len(parent.grid[0])):
-                 if child.grid[i][j] == parent.grid[i][j] - 1:
-                     return (i, j)
-        for i in range(len(parent.grid)):
-             for j in range(len(parent.grid[0])):
-                 if child.grid[i][j] < parent.grid[i][j]:
-                     return (i, j)
-        raise ValueError("Error")
-        
+    if len(diffs) == 1 and diffs[0][0] == 1:
+        return (diffs[0][1], diffs[0][2])
+
+    cr, cc = (rows - 1) / 2.0, (cols - 1) / 2.0
+    diffs.sort(key=lambda t: (-t[0], (t[1]-cr)**2 + (t[2]-cc)**2))
+    _, r, c = diffs[0]
+    return (r, c)
+
+def _child_iter(state: State):
+    """
+    Yield (move, child_state). Deterministically shuffle child order
+    based on state to avoid positional bias on ties.
+    """
+    # If your State exposes richer APIs, prefer them:
+    if hasattr(state, "children"):  # yields (move, child)
+        children = list(state.children())
+        rng = random.Random(hash(str(state)) & 0xffffffff)
+        rng.shuffle(children)
+        for move, child in children:
+            yield move, child
+        return
+
+    if hasattr(state, "moves_with_coords"):  # yields (move, child)
+        children = list(state.moves_with_coords())
+        rng = random.Random(hash(str(state)) & 0xffffffff)
+        rng.shuffle(children)
+        for move, child in children:
+            yield move, child
+        return
+
+    # Fallback: only have .moves() -> child states
+    children = list(state.moves())
+    rng = random.Random(hash(str(state)) & 0xffffffff)
+    rng.shuffle(children)
+    for child in children:
+        move = _diff_move(state, child)
+        yield move, child
 
 def _static_eval(state: State) -> float:
     """
-    Evaluates how favorable the given state is for the current player.
-    A higher score indicates a more favorable position.
-    more active cells = better
-
+    Higher is better for the current player.
     """
-
     active = sum(1 for row in state.grid for cell in row if cell > 0)
-    score = float(active)
+    score = 50 - active  # fewer active cells may be closer to finishing (tune to your game)
 
     # Bonus for number of regions
     try:
         score += 0.05 * state.numRegions()
     except Exception:
         pass
-    
-    # Small bonus/penalty for odd/even number of active cells
-    score += 0.01 * (1 if active % 2 else -1)
 
+    # Bonus for 'hingers'
+    try:
+        hingers = state.numHingers()
+        score += 2 * hingers
+    except Exception:
+        pass
+
+    # Mild parity signal + tiny deterministic jitter to break ties
+    score += 0.01 * (1 if active % 2 else -1)
+    score += (hash(str(state)) & 0xff) * 1e-5
     return score
 
-# structure to store result of minimax
 @dataclass
 class _Result:
     value: float
     move: Move
 
-
-"""
-    Agent Class
-
-"""
-
 class Agent:
-    """
-    An Ai agent that can play the Hinger game using Minimax and AlphaBeta pruning.
-    """
     def __init__(self, size: Tuple[int, int], name: str = "B6"):
         self.name = name
         self.size = size
@@ -99,15 +122,11 @@ class Agent:
         self._memo_win: Dict[str, bool] = {}
 
     def __str__(self) -> str:
-        """ Display agent information """
         return f"Agent(name={self.name}, size={self.size}, modes={self.modes})"
 
-
     def move(self, state: State, mode: str = "alphabeta") -> Move:
-        """ returns the next move for the given state """
         if _terminal(state):
             return None
-    
         if mode not in self.modes:
             mode = "alphabeta"
 
@@ -116,76 +135,61 @@ class Agent:
             result = self._minimax(state, depth, True)
         else:
             result = self._alphabeta(state, depth, -math.inf, math.inf, True)
+
+        print(f"[{self.name}] using {mode}, chose move {result.move}")
         return result.move
-      
 
     def _minimax(self, state: State, depth: int, maximizing: bool) -> _Result:
-        """ Minimax search algorithm implementation """
         if _terminal(state):
             return _Result(-1_000_000 if maximizing else 1_000_000, None)
-    
         if depth == 0:
             return _Result(_static_eval(state), None)
-    
+
         best_move: Move = None
         if maximizing:
             best_value = -math.inf
-            for child in state.moves():
-                move = _diff_move(state, child)
+            for move, child in _child_iter(state):
                 value = self._minimax(child, depth - 1, False).value
                 if value > best_value:
                     best_value, best_move = value, move
             return _Result(best_value, best_move)
         else:
             best_value = math.inf
-            for child in state.moves():
-                move = _diff_move(state, child)
+            for move, child in _child_iter(state):
                 value = self._minimax(child, depth - 1, True).value
                 if value < best_value:
                     best_value, best_move = value, move
             return _Result(best_value, best_move)
 
-
     def _alphabeta(self, state: State, depth: int, alpha: float, beta: float, maximizing: bool) -> _Result:
-        """ Minimax with Alpha-Beta pruning search algorithm implementation """
         if _terminal(state):
             return _Result(-1_000_000 if maximizing else 1_000_000, None)
-    
         if depth == 0:
             return _Result(_static_eval(state), None)
 
         best_move: Move = None
         if maximizing:
             value = -math.inf
-            for child in state.moves():
-                move = _diff_move(state, child)
+            for move, child in _child_iter(state):
                 result = self._alphabeta(child, depth - 1, alpha, beta, False)
                 if result.value > value:
                     value, best_move = result.value, move
                 alpha = max(alpha, value)
                 if alpha >= beta:
-                    break # pruning
+                    break
             return _Result(value, best_move)
         else:
             value = math.inf
-            for child in state.moves():
-                move = _diff_move(state, child)
+            for move, child in _child_iter(state):
                 result = self._alphabeta(child, depth - 1, alpha, beta, True)
                 if result.value < value:
                     value, best_move = result.value, move
                 beta = min(beta, value)
                 if alpha >= beta:
-                    break # pruning
+                    break
             return _Result(value, best_move)
-    
 
     def win(self, state: State) -> bool:
-        """
-        Determines if the current state is a winning state for the current player.
-        Uses memoization to store previously computed results.   
-
-        """
-
         key = str(state)
         if key in self._memo_win:
             return self._memo_win[key]
@@ -203,7 +207,7 @@ class Agent:
                         self._memo_win[key] = True
                         return True
 
-        # 2) Otherwise, minimax-style: if any child is losing for the opponent, current is winning
+        # 2) Minimax-style: winning if any child is losing for opponent
         for child in state.moves():
             if not self.win(child):
                 self._memo_win[key] = True
@@ -213,11 +217,18 @@ class Agent:
         return False
 
 #
-# Tester Function
+# Tester
 #
+def _legal_moves_positions(state: State) -> List[Tuple[int,int]]:
+    poss = set()
+    for child in state.moves():
+        try:
+            poss.add(_diff_move(state, child))
+        except Exception:
+            pass
+    return sorted(poss)
 
 def tester():
-    """ Tester function for the Agent """
     boardA = [
         [1, 1, 0, 0, 2],
         [1, 1, 0, 0, 0],
@@ -225,22 +236,19 @@ def tester():
         [0, 0, 0, 1, 1]
     ]
     sA = State(boardA)
-
     agent = Agent(size=(4, 5), name="B6")
-
     print(agent)
     print("State A:")
     print(sA)
 
     for mode in ["minimax", "alphabeta"]:
         t0 = time.perf_counter()
-        move = agent.move(sA, mode)
+        mv = agent.move(sA, mode)
         dt = time.perf_counter() - t0
-        print(f"{mode} suggests move: {move} | time: {dt:.6f}s")
+        print(f"{mode} suggests move: {mv} | time: {dt:.6f}s | legal? {mv in _legal_moves_positions(sA)}")
 
-    """ Win condition tester """
-    print("win([[1]]) =", agent.win(State([[1]])))  # True (hinger present)
-    print("win([[0]]) =", agent.win(State([[0]])))  # False (no moves)
+    print("win([[1]]) =", agent.win(State([[1]])))
+    print("win([[0]]) =", agent.win(State([[0]])))
 
 if __name__ == "__main__":
     tester()

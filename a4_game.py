@@ -17,13 +17,14 @@ Game options can be adjusted in the GAME CONFIGURATION section.
 import pygame
 import sys
 from a1_state import State
-from a3_agent import Agent
+from a3_agent import Agent, _diff_move  # add _diff_move here
+
 
 """
 GAME CONFIGURATION HERE
 """
 BOARD_SIZE = (4, 5) # Doesn't seem like this is changeable.
-GAME_MODE = 3 # 0: AI vs AI, 1: Human vs AI, 2: AI vs Human, 3: Human vs Human
+GAME_MODE = 0 # 0: AI vs AI, 1: Human vs AI, 2: AI vs Human, 3: Human vs Human
 AI_1 = Agent(size=BOARD_SIZE, name="AI-Agent Yu Eeyai")
 AI_2 = Agent(size=BOARD_SIZE, name="AI-Agent Core Suwerk")
 AI_DELAY = 1000  # milliseconds delay for AI moves
@@ -137,7 +138,17 @@ def play(state, agentA = None, agentB = None):
         pygame.display.flip()
 
         # Check for time out
+        no_moves = True
+        for _ in state.moves():
+            no_moves = False
+            break
+        if no_moves:
+            # Current player has no move; previous player wins
+            winner = other_name
+            running = False
+            break
 
+        # Check for time out
         if remaining_time <= 0:
             winner = other_name
             running = False
@@ -169,33 +180,58 @@ def play(state, agentA = None, agentB = None):
         
         # AI
         else:
-            pygame.time.delay(AI_DELAY)  # Let's you see the board before AI moves
-            move = current_agent.move(state, mode = AI_MODE)
+            pygame.time.delay(AI_DELAY)
+            import time
+            t0 = time.perf_counter()
+            move = current_agent.move(state, mode=AI_MODE)
+            dt = time.perf_counter() - t0
+            print(f"[AI] {current_name} used {AI_MODE} in {dt:.4f}s -> {move}")
+    
             if move is None or state.grid[move[0]][move[1]] <= 0:
-                # Invalid move, therefore opponent should win
                 winner = other_name
                 running = False
                 break
 
+
         # Make the move
         regionsBefore = state.numRegions()
-        state.grid[move[0]][move[1]] -= 1
-        regionsAfter = state.numRegions()
+        cell_before = state.grid[move[0]][move[1]]
 
-        if regionsAfter > regionsBefore:
+        # Find the matching child produced by the rules engine
+        next_state = None
+        for child in state.moves():
+            try:
+                if _diff_move(state, child) == move:
+                    next_state = child
+                    break
+            except Exception:
+                continue
+
+        if next_state is None:
+            # If we couldn't map, the move is invalid in terms of game rules => other side wins
+            winner = other_name
+            running = False
+            break
+
+        regionsAfter = next_state.numRegions()
+
+        # Hinger win: click on a 1 that increases region count
+        if cell_before == 1 and regionsAfter > regionsBefore:
             winner = current_name
+            print(f"💥 Hinger move by {current_name}! They win!")
             running = False
-            
-        # Check draw
-        elif all(cell == 0 for row in state.grid for cell in row):
-            winner = None
-            running = False
+            state = next_state  # show the winning state
+            break
+        else:
+            state = next_state  # normal update
 
-        # Switch turns
-        current_agent, other_agent = other_agent, current_agent
-        current_name, other_name = other_name, current_name
-        turn_start_time = pygame.time.get_ticks() # Reset turn timer
-        clock.tick(FPS)
+            # Swap turn
+            current_agent, other_agent = other_agent, current_agent
+            current_name,  other_name  = other_name,  current_name
+            turn_start_time = pygame.time.get_ticks()
+            clock.tick(FPS)
+            continue
+
     
     # Display result
     screen.fill(BG_COLOR)
