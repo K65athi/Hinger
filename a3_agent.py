@@ -14,6 +14,7 @@ from typing import Optional, Tuple, List, Dict
 from dataclasses import dataclass
 import math
 
+# Import the State class from a1_state.py
 try:
     from a1_state import State
 except ImportError:
@@ -35,6 +36,11 @@ def _terminal(state: State) -> bool:
     return True
 
 def _diff_move(parent: State, child: State) -> Tuple[int, int]:
+        """
+        Finds the changed cell between parent and child states.
+        returns the (row, col) of the cell that was changed.
+
+        """
         for i in range(len(parent.grid)):
              for j in range(len(parent.grid[0])):
                  if child.grid[i][j] == parent.grid[i][j] - 1:
@@ -47,19 +53,28 @@ def _diff_move(parent: State, child: State) -> Tuple[int, int]:
         
 
 def _static_eval(state: State) -> float:
+    """
+    Evaluates how favorable the given state is for the current player.
+    A higher score indicates a more favorable position.
+    more active cells = better
+
+    """
 
     active = sum(1 for row in state.grid for cell in row if cell > 0)
     score = float(active)
 
+    # Bonus for number of regions
     try:
         score += 0.05 * state.numRegions()
     except Exception:
         pass
-
+    
+    # Small bonus/penalty for odd/even number of active cells
     score += 0.01 * (1 if active % 2 else -1)
 
     return score
 
+# structure to store result of minimax
 @dataclass
 class _Result:
     value: float
@@ -72,6 +87,9 @@ class _Result:
 """
 
 class Agent:
+    """
+    An Ai agent that can play the Hinger game using Minimax and AlphaBeta pruning.
+    """
     def __init__(self, size: Tuple[int, int], name: str = "A9"):
         self.name = name
         self.size = size
@@ -80,6 +98,7 @@ class Agent:
         self._memo_win: Dict[str, bool] = {}
 
     def __str__(self) -> str:
+        """ Display agent information """
         return f"Agent(name={self.name}, size={self.size}, modes={self.modes})"
 
 
@@ -160,6 +179,11 @@ class Agent:
     
 
     def win(self, state: State) -> bool:
+        """
+        Determines if the current state is a winning state for the current player.
+        Uses memoization to store previously computed results.   
+
+        """
 
         key = str(state)
         if key in self._memo_win:
