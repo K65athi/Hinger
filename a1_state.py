@@ -77,7 +77,7 @@ class State:
                     if after > before:
                         count += 1
         return count
-"""
+
 # tester
 def tester():
     boardA = [
@@ -101,4 +101,4 @@ def tester():
 
 if __name__ == "__main__":
     tester()
-"""
+
