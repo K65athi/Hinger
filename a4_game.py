@@ -4,7 +4,10 @@
 Hinger Project
 Coursework 001 for: CMP-6058A Artificial Intelligence
 
-Includes a State class for Task 1
+GUI Utilising Pygame for Task 4. Implements a working game between two agents or humans as well as a timer function,
+and turn labels.
+
+Game options can be adjusted in the GAME CONFIGURATION section.
 
 @author: B6 (100393447, 100361094, and 100387788)
 @date:   10/10/2025
@@ -19,10 +22,13 @@ from a3_agent import Agent
 """
 GAME CONFIGURATION HERE
 """
-BOARD_SIZE = (4, 5)
-GAME_MODE = 1 # 0: AI vs AI, 1: Human vs AI, 2: AI vs Human, 3: Human vs Human
+BOARD_SIZE = (4, 5) # Doesn't seem like this is changeable.
+GAME_MODE = 3 # 0: AI vs AI, 1: Human vs AI, 2: AI vs Human, 3: Human vs Human
 AI_1 = Agent(size=BOARD_SIZE, name="AI-Agent Yu Eeyai")
 AI_2 = Agent(size=BOARD_SIZE, name="AI-Agent Core Suwerk")
+AI_DELAY = 1000  # milliseconds delay for AI moves
+TURN_TIME_LIMIT = 10  # seconds per turn
+AI_MODE = "alphabeta" # Unsure if this affects anything
 
 match (GAME_MODE):
     case 0:
@@ -45,7 +51,11 @@ Pygame settings and values
 CELL_SIZE = 60
 MARGIN = 5
 FPS = 30
-AI_MODE = "alphabeta"
+TOP_OFFSET = 50
+BOTTOM_BAR_HEIGHT = 50
+
+WINDOW_WIDTH = BOARD_SIZE[1] * CELL_SIZE
+WINDOW_HEIGHT = BOARD_SIZE[0] * CELL_SIZE + TOP_OFFSET + BOTTOM_BAR_HEIGHT
 
 BG_COLOR = (255, 255, 255)
 GRID_COLOR = (200, 200, 200)
@@ -62,11 +72,11 @@ pygame.init()
 font = pygame.font.SysFont("Arial", 24)
 clock = pygame.time.Clock()
 
-def draw_board(screen, state, selected_cell=None):
+def draw_board(screen, state, selected_cell=None, offset_y=0):
     rows, cols = len(state.grid), len(state.grid[0])
     for i in range(rows):
         for j in range(cols):
-            x, y = j * CELL_SIZE, i * CELL_SIZE
+            x, y = j * CELL_SIZE, i * CELL_SIZE + offset_y
             rect = pygame.Rect(x, y, CELL_SIZE - MARGIN, CELL_SIZE - MARGIN)
 
             if state.grid[i][j] > 0:
@@ -88,7 +98,7 @@ def play(state, agentA = None, agentB = None):
     Plays a game between two agents or human. (None is Human)
     """
 
-    screen = pygame.display.set_mode((BOARD_SIZE[1] * CELL_SIZE, BOARD_SIZE[0] * CELL_SIZE + 50))
+    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
     pygame.display.set_caption("Hinger Game")
 
     humanA = agentA is None
@@ -101,14 +111,37 @@ def play(state, agentA = None, agentB = None):
     running = True
     winner = None
     selected_cell = None
+    turn_start_time = pygame.time.get_ticks()
 
     while running:
         screen.fill(BG_COLOR)
-        draw_board(screen, state, selected_cell)
-        msg = f"{current_name}'s Turn"
-        text = font.render(msg, True, TEXT_COLOR)
-        screen.blit(text, (10, BOARD_SIZE[0] * CELL_SIZE + 10))
+
+        # Timer at the top
+        elapsed_time = pygame.time.get_ticks() - turn_start_time
+        remaining_time = max(0, TURN_TIME_LIMIT - elapsed_time // 1000)
+        timer_msg = font.render(f"Time Left: {remaining_time}s", True, TEXT_COLOR)
+        screen.blit(timer_msg, (10, 10))
+
+        # Draw the board
+        draw_board(screen, state, selected_cell, offset_y=TOP_OFFSET)
+
+        # Display turn info
+        pygame.draw.rect(screen, GRID_COLOR, (0, TOP_OFFSET + BOARD_SIZE[0] * CELL_SIZE, BOARD_SIZE[1] * CELL_SIZE, BOTTOM_BAR_HEIGHT))
+
+        # Player info
+        text_turn = font.render(f"{current_name}'s Turn", True, TEXT_COLOR)
+        screen.blit(text_turn, (10, TOP_OFFSET + BOARD_SIZE[0] * CELL_SIZE + BOTTOM_BAR_HEIGHT //4))
+
+        
+
         pygame.display.flip()
+
+        # Check for time out
+
+        if remaining_time <= 0:
+            winner = other_name
+            running = False
+            break
 
         move = None
 
@@ -122,7 +155,7 @@ def play(state, agentA = None, agentB = None):
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     x, y = pygame.mouse.get_pos()
-                    row, col = y // CELL_SIZE, x // CELL_SIZE
+                    row, col = (y - TOP_OFFSET) // CELL_SIZE, x // CELL_SIZE
                     if (0 <= row < len(state.grid)) and (0 <= col < len(state.grid[0])):    
                         if state.grid[row][col] <= 0:
                             # Invalid move, therefore opponent should win
@@ -136,7 +169,7 @@ def play(state, agentA = None, agentB = None):
         
         # AI
         else:
-            pygame.time.delay(500)  # Let's you see the board before AI moves
+            pygame.time.delay(AI_DELAY)  # Let's you see the board before AI moves
             move = current_agent.move(state, mode = AI_MODE)
             if move is None or state.grid[move[0]][move[1]] <= 0:
                 # Invalid move, therefore opponent should win
@@ -161,6 +194,7 @@ def play(state, agentA = None, agentB = None):
         # Switch turns
         current_agent, other_agent = other_agent, current_agent
         current_name, other_name = other_name, current_name
+        turn_start_time = pygame.time.get_ticks() # Reset turn timer
         clock.tick(FPS)
     
     # Display result
