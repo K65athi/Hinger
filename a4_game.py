@@ -10,7 +10,7 @@ and turn labels.
 Game options can be adjusted in the GAME CONFIGURATION section.
 
 @author: B6 (100393447, 100361094, and 100387788)
-@date:   10/10/2025
+@date:   21/10/2025
 
 """
 
