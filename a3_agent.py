@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Optional, Tuple, List, Dict
 from dataclasses import dataclass
 import math
+import time
 
 # Import the State class from a1_state.py
 try:
@@ -90,7 +91,7 @@ class Agent:
     """
     An Ai agent that can play the Hinger game using Minimax and AlphaBeta pruning.
     """
-    def __init__(self, size: Tuple[int, int], name: str = "A9"):
+    def __init__(self, size: Tuple[int, int], name: str = "B6"):
         self.name = name
         self.size = size
         self.modes = ["minimax", "alphabeta"]
@@ -225,15 +226,17 @@ def tester():
     ]
     sA = State(boardA)
 
-    agent = Agent(size=(4, 5), name="A9")
+    agent = Agent(size=(4, 5), name="B6")
 
     print(agent)
     print("State A:")
     print(sA)
 
     for mode in ["minimax", "alphabeta"]:
+        t0 = time.perf_counter()
         move = agent.move(sA, mode)
-        print(f"{mode} suggests move:", move)
+        dt = time.perf_counter() - t0
+        print(f"{mode} suggests move: {move} | time: {dt:.6f}s")
 
     """ Win condition tester """
     print("win([[1]]) =", agent.win(State([[1]])))  # True (hinger present)
