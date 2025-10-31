@@ -81,6 +81,7 @@ def tester():
     running = True
 
     while running:
+
         screen.fill(BG_COLOR)
         draw_board(screen, state, selected_cell)
 
@@ -100,31 +101,58 @@ def tester():
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     x, y = pygame.mouse.get_pos()
                     row, col = y // CELL_SIZE, x // CELL_SIZE
-                    if (row < len(state.grid)) and col < (len(state.grid[0])):
+                    if (row < len(state.grid)) and col < (len(state.grid[0])):    
                         if state.grid[row][col] > 0:
+                            
+                            # Check if a hinger move was played
+                            regionsBefore = state.numRegions()
                             state.grid[row][col] -= 1
+                            regionsAfter = state.numRegions()
+                            if regionsAfter > regionsBefore:
+                                winner = "Human"
+                                running = False
+                                break
+
+                            # Pass turn
                             human_turn = False
+
         
         # AI
         else:
             pygame.display.flip()
+            regionsBefore = state.numRegions()
             move = agent.move(state, mode = AI_MODE)
             if move:
                 r, c = move
                 state.grid[r][c] -= 1
+                regionsAfter = state.numRegions()
+                if regionsAfter > regionsBefore:
+                    winner = "AI"
+                    running = False
+                    break
             human_turn = True
 
+        # Check for draw
         if all(cell == 0 for row in state.grid for cell in row):
-            screen.fill(BG_COLOR)
-            result = "Human Wins!" if not human_turn else "AI Wins!"
-            text = font.render(result, True, TEXT_COLOR)
-            screen.blit(text, (BOARD_SIZE[1] * CELL_SIZE // 2 - 60, BOARD_SIZE[0] * CELL_SIZE // 2))
-            pygame.display.flip()
-            pygame.time.wait(3000)
+            winner = None
             running = False
-
+        
         clock.tick(FPS)
 
+    # Display result
+    screen.fill(BG_COLOR)
+    if winner == "Human":
+        result = "Human Wins! (Hinger Found)"
+    elif winner == "AI":
+        result = "AI Wins! (Hinger Found)"
+    else:
+        result = "It's a Draw! (No Moves Left)"
+    text = font.render(result, True, TEXT_COLOR)
+    screen.blit(text, (BOARD_SIZE[1] * CELL_SIZE // 2 - 140, BOARD_SIZE[0] * CELL_SIZE // 2))
+    pygame.display.flip()
+    pygame.time.delay(3000)
+    pygame.quit()       
+    
 
 if __name__ == "__main__":
     tester()
